@@ -1,11 +1,43 @@
 from tkinter import *
 import random
-from tkinter.messagebox import showinfo
+from tkinter import ttk
+from tkinter.messagebox import showinfo, showerror
+
+from base import *
 
 
 def timing(a, n):
     return (a * 999 + n) // 60,  (a * 999 + n) % 60
 
+
+def show_statics(root):
+    table_window = Toplevel(root)
+
+    table = ttk.Treeview(table_window)
+    table['columns'] = ('Name', 'Format', 'Time')
+    table.column('#0', width=0, stretch=NO)
+    table.column('Name', anchor=CENTER, width=100)
+    table.column('Format', anchor=CENTER, width=100)
+    table.column('Time', anchor=CENTER, width=100)
+
+    table.heading('#0', text='', anchor=CENTER)
+    table.heading('Name', text='Name', anchor=CENTER)
+    table.heading('Format', text='Format', anchor=CENTER)
+    table.heading('Time', text='Time', anchor=CENTER)
+
+    connect()
+
+    for i, val in enumerate(read_sqlite_table()):
+        table.insert(parent='', index='end', iid=i, values=val)
+
+    table.pack()
+
+
+def developer():
+    showinfo(title="Information", message="Developer: tanj. Git hub: tantoni228")
+
+
+win_status = False
 
 offsets = (
     (0, 0, 1, 0),  # top
@@ -59,8 +91,13 @@ class Saper:
         self.cash_map = []
         self.data = []
         self.map = [[0 for _ in range(self.x)] for _ in range(self.y)]
+        self.window = Tk()
+        self.window.title("Сапер скачать бесплатно, без регистрации.")
+        self.window.geometry('600x450')
+        self.window.resizable(width=False, height=False)
 
     def create_map(self):
+        self.map = [[0 for _ in range(self.x)] for _ in range(self.y)]
         self.count_bomb = random.randint(10, 18)
 
         x = [random.randrange(0, self.x - 1) for _ in range(self.count_bomb)]
@@ -79,6 +116,7 @@ class Saper:
             # print(i)
 
     def create_cash(self):
+        self.cash_map = []
         for i in range(self.y):
             self.cash_map.append([])
             for j in range(self.x):
@@ -143,6 +181,8 @@ class Saper:
         x, y = self.find(btn)
         if self.map_status[y][x] == 1:
             return
+        if self.map_status[y][x] == 2:
+            self.count_flags += 1
         # print(x, y)
         self.map_status[y][x] = 1
         match self.cash_map[y][x]:
@@ -168,11 +208,28 @@ class Saper:
             case 8:
                 image = PhotoImage(file="img/m8.png")
             case 'B':
+                global n, a
                 image = PhotoImage(file="img/bomd_2.png")
+                self.show_bombs(x, y)
+                btn.configure(image=image)
+                showerror(title="GAME OVER", message="That's where you got caught!!!")
+                a = 0
+                n = 0
+                self.create_map()
+                self.create_cash()
+                self.run()
+                return
             case _:
                 image = PhotoImage(file="img/bomd_2.png")
         btn.configure(image=image)
         btn.image = image  # Сохраняем изображение в атрибуте кнопки
+
+    def show_bombs(self, x, y):
+        for i, val in enumerate(self.map):
+            for j, val2 in enumerate(val):
+                if (j != x or i != y) and val2:
+                    image = PhotoImage(file="img/bomd_2.png")
+                    self.data[i][j].configure(image=image)
 
     def flag(self, btn):
         x, y = self.find(btn)
@@ -207,12 +264,9 @@ class Saper:
             return True
         return False
 
-
     def run(self):
-        self.window = Tk()
-        self.window.title("Сапер скачать бесплатно, без регистрации.")
-        self.window.geometry('600x450')
-        self.window.resizable(width=False, height=False)
+        self.data = []
+        self.map_status = [[0 for _ in range(self.x)] for _ in range(self.y)]
         screen = Canvas(self.window, width=200, height=50)
         screen.create_text(32, 10,
                            text="Time: ", font="Verdana 14")
@@ -222,11 +276,17 @@ class Saper:
                            text="Flags: ", font="Verdana 14")
         screen2.grid(row=1, column=10)
 
-        developer = Button(self.window, text="DEVELOPER", height=2, width=12)
-        developer.grid(row=2, column=10)
+        deve_loper = Button(self.window, text="DEVELOPER", height=2, width=12, command=developer)
+        deve_loper.grid(row=2, column=10)
 
-        statistics = Button(self.window, text="STATISTICS", height=2, width=12)
+        statistics = Button(self.window, text="STATISTICS", height=2, width=12, command=lambda: show_statics(self.window))
         statistics.grid(row=3, column=10)
+
+        label = Label(self.window, text="Your name: ", font="Verdana 14")
+        label.grid(row=4, column=10)
+
+        entry = Entry(self.window)
+        entry.grid(row=5, column=10, padx=10, ipady=15, ipadx=5)
 
         image = PhotoImage(file="img/cell.png")  # задать размер
         for i in range(self.y):
@@ -245,7 +305,10 @@ class Saper:
         dig2_2 = Digit(screen2, 90, 10)
 
         def update():
-            global n, a
+            global n, a, win_status
+            if win_status:
+                win_status = False
+                return
             dig2.show(n % 10)
             dig1.show(n % 100 // 10)  # Control what you want to show here , eg (n+1)%10
             dig.show(n // 100)
@@ -257,11 +320,14 @@ class Saper:
             a += n // 999
             n %= 999
             self.window.after(1000, update)
-
             if self.count_flags == 0:
-                if self.win():
+                if self.win() and not win_status:
+                    win_status = True
                     showinfo(title="Information", message="Hello, winner!!! Your time: {:02d}:{:02d}".format(*timing(a, n)))
+                    add_user(time="{:02d}:{:02d}".format(*timing(a, n)), name=entry.get(), format="8x8")
                     self.create_map()
+                    n = 0
+                    a = 0
                     self.create_cash()
                     self.run()
                     return
